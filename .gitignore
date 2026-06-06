@@ -1,0 +1,6 @@
+# Locally-built command binaries (source lives alongside; the binary does not).
+/cmd/libp-vet/libp-vet
+
+# Go workspace files are per-developer and reference local sibling checkouts.
+go.work
+go.work.sum
