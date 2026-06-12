@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/peios/libp-go/errno"
+	"github.com/peios/libp-go/sd"
 	uapi "github.com/peios/pkm/uapi/go"
 )
 
@@ -130,34 +131,36 @@ func (k *Key) Info() (KeyInfo, error) {
 	return KeyInfo{}, fmt.Errorf("libp/registry: key info: %w", errno.ERANGE)
 }
 
-// Security reads the key's security descriptor (binary KACS format). info
-// is a bitmask of which components to return (owner / group / DACL / SACL).
-func (k *Key) Security(info uint32) ([]byte, error) {
-	sd := make([]byte, sdCapHint)
+// Security reads the key's security descriptor, returning the raw
+// self-relative bytes — decode them with sd.ParseDescriptor. info selects
+// which components to return (owner / group / DACL / SACL).
+func (k *Key) Security(info sd.Info) ([]byte, error) {
+	buf := make([]byte, sdCapHint)
 	for range maxProbeRetries {
 		args := uapi.Reg_get_security_args{
-			Security_info: info,
-			Sd_ptr:        uint64(uintptr(bytesPtr(sd))),
-			Sd_len:        uint32(len(sd)),
+			Security_info: uint32(info),
+			Sd_ptr:        uint64(uintptr(bytesPtr(buf))),
+			Sd_len:        uint32(len(buf)),
 		}
 		err := k.ioctl(uapi.REG_IOC_GET_SECURITY, ptr(&args))
-		runtime.KeepAlive(sd)
+		runtime.KeepAlive(buf)
 		if errors.Is(err, errno.ERANGE) {
-			sd = make([]byte, args.Sd_len)
+			buf = make([]byte, args.Sd_len)
 			continue
 		}
 		if err != nil {
 			return nil, fmt.Errorf("libp/registry: get security: %w", err)
 		}
-		return sd[:args.Sd_len], nil
+		return buf[:args.Sd_len], nil
 	}
 	return nil, fmt.Errorf("libp/registry: get security: %w", errno.ERANGE)
 }
 
-// SetSecurity modifies the key's security descriptor (binary KACS format).
-// SD changes are not layer-qualified — they mutate the key directly.
-func (k *Key) SetSecurity(info uint32, sd []byte) error {
-	return k.setSecurityIn(info, sd, noTxn)
+// SetSecurity writes sdBytes — a self-relative security descriptor — to the
+// key. info selects which components are applied. SD changes are not
+// layer-qualified — they mutate the key directly.
+func (k *Key) SetSecurity(info sd.Info, sdBytes []byte) error {
+	return k.setSecurityIn(info, sdBytes, noTxn)
 }
 
 // Flush forces the source to persist this hive's pending writes (requires
@@ -297,15 +300,15 @@ func (k *Key) enumSubkeyAt(index uint32, txnFD int) (Subkey, bool, error) {
 	return Subkey{}, false, fmt.Errorf("libp/registry: enum subkey %d: %w", index, errno.ERANGE)
 }
 
-func (k *Key) setSecurityIn(info uint32, sd []byte, txnFD int) error {
+func (k *Key) setSecurityIn(info sd.Info, sdBytes []byte, txnFD int) error {
 	args := uapi.Reg_set_security_args{
-		Security_info: info,
-		Sd_len:        uint32(len(sd)),
-		Sd_ptr:        uint64(uintptr(bytesPtr(sd))),
+		Security_info: uint32(info),
+		Sd_len:        uint32(len(sdBytes)),
+		Sd_ptr:        uint64(uintptr(bytesPtr(sdBytes))),
 		Txn_fd:        int32(txnFD),
 	}
 	err := k.ioctl(uapi.REG_IOC_SET_SECURITY, ptr(&args))
-	runtime.KeepAlive(sd)
+	runtime.KeepAlive(sdBytes)
 	if err != nil {
 		return fmt.Errorf("libp/registry: set security: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/peios/libp-go/errno"
 	"github.com/peios/libp-go/internal/sys"
+	"github.com/peios/libp-go/sd"
 	uapi "github.com/peios/pkm/uapi/go"
 )
 
@@ -246,6 +247,6 @@ func (tk *TxnKey) Subkeys() ([]Subkey, error) { return tk.key.subkeysIn(tk.txnFD
 
 // SetSecurity modifies the key's security descriptor within the
 // transaction.
-func (tk *TxnKey) SetSecurity(info uint32, sd []byte) error {
-	return tk.key.setSecurityIn(info, sd, tk.txnFD)
+func (tk *TxnKey) SetSecurity(info sd.Info, sdBytes []byte) error {
+	return tk.key.setSecurityIn(info, sdBytes, tk.txnFD)
 }
