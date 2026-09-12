@@ -7,7 +7,9 @@
 // descriptor codec can depend on sd alone. See libp-design.md.
 //
 // The grammar follows MS-DTYP §2.5.1. Access masks are emitted as hex
-// and accepted as hex, decimal, or the standard rights mnemonics.
+// and accepted as hex, decimal, the standard rights mnemonics, or a run
+// of mnemonics closed by a hex literal ("FRFX0x6") — the last form names
+// the rights that have a mnemonic and spells out the ones that do not.
 // Two-letter SID aliases resolve against the MS-DTYP alias table;
 // domain- and machine-relative aliases (DA, EA, LA, …) need a
 // resolution context — see WithDomain and WithMachine.

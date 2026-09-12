@@ -236,17 +236,24 @@ var rightsMnemonics = map[string]uint32{
 }
 
 // parseMask decodes an SDDL rights field — "0x"-prefixed hex, decimal,
-// or a run of two-letter mnemonics; the empty field is mask zero.
+// or a run of two-letter mnemonics optionally closed by a hex literal;
+// the empty field is mask zero.
+//
+// The mnemonic-then-hex form is what names a right that has no two-letter
+// code without giving up on the ones that do: "FRFX0x6" reads as file read,
+// file execute, and FILE_ADD_FILE|FILE_ADD_SUBDIRECTORY, where the whole
+// mask in bare hex ("0x1200af") says the same thing and tells a reader
+// nothing. MS-DTYP §2.5.1.1 permits either form and does not forbid the
+// mixture; libpeios' parse_rights has always accepted it, and two parsers
+// for one language accept one language (PEI-562).
+//
+// The hex literal consumes the rest of the field, so it can only come last.
 func parseMask(field string) (uint32, error) {
 	if field == "" {
 		return 0, nil
 	}
-	if len(field) > 2 && (field[:2] == "0x" || field[:2] == "0X") {
-		v, err := strconv.ParseUint(field[2:], 16, 32)
-		if err != nil {
-			return 0, fmt.Errorf("malformed hex access mask %q", field)
-		}
-		return uint32(v), nil
+	if hasHexPrefix(field) {
+		return parseHexMask(field)
 	}
 	if isAllDigits(field) {
 		v, err := strconv.ParseUint(field, 10, 32)
@@ -255,19 +262,43 @@ func parseMask(field string) (uint32, error) {
 		}
 		return uint32(v), nil
 	}
-	if len(field)%2 != 0 {
-		return 0, fmt.Errorf("malformed rights mnemonics %q", field)
-	}
 	var mask uint32
-	for i := 0; i < len(field); i += 2 {
+	for i := 0; i < len(field); {
+		if hasHexPrefix(field[i:]) {
+			v, err := parseHexMask(field[i:])
+			if err != nil {
+				return 0, err
+			}
+			return mask | v, nil
+		}
+		if i+2 > len(field) {
+			return 0, fmt.Errorf("malformed rights mnemonics %q", field)
+		}
 		code := field[i : i+2]
 		bit, ok := rightsMnemonics[code]
 		if !ok {
 			return 0, fmt.Errorf("unknown rights mnemonic %q", code)
 		}
 		mask |= bit
+		i += 2
 	}
 	return mask, nil
+}
+
+// hasHexPrefix reports whether s opens a hex literal. "0x" with no digits
+// after it is not one — it stays a (bad) mnemonic pair, which is what it
+// was before mixed fields were accepted.
+func hasHexPrefix(s string) bool {
+	return len(s) > 2 && (s[:2] == "0x" || s[:2] == "0X")
+}
+
+// parseHexMask decodes a whole "0x"-prefixed literal.
+func parseHexMask(s string) (uint32, error) {
+	v, err := strconv.ParseUint(s[2:], 16, 32)
+	if err != nil {
+		return 0, fmt.Errorf("malformed hex access mask %q", s)
+	}
+	return uint32(v), nil
 }
 
 // formatMask renders an access mask as hex. SDDL rights mnemonics are
