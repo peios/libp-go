@@ -41,7 +41,11 @@ type CheckRequest struct {
 	LocalClaims     []Claim
 	PIPType         uint32
 	PIPTrust        uint32
-	AuditContext    []byte
+	// AuditContext names the object being checked for the kernel's audit
+	// record of the decision: the PGSS §6.7 map EncodeAuditContext
+	// builds. A non-empty one the kernel would refuse fails the check
+	// with ErrBadAuditContext before the syscall.
+	AuditContext []byte
 }
 
 // Decision is the outcome of a scalar access check.
@@ -79,6 +83,11 @@ func (req CheckRequest) assemble() (uapi.Kacs_access_check_args, [][]byte, error
 	if len(req.SD) == 0 {
 		return uapi.Kacs_access_check_args{}, nil,
 			errors.New("libp/sd: access check requires a security descriptor")
+	}
+	if len(req.AuditContext) > 0 {
+		if err := ValidateAuditContext(req.AuditContext); err != nil {
+			return uapi.Kacs_access_check_args{}, nil, err
+		}
 	}
 	claims, err := EncodeClaimsArray(req.LocalClaims)
 	if err != nil {
