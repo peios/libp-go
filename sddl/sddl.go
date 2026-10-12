@@ -74,8 +74,9 @@ func Parse(s string, opts ...Option) (sd.Descriptor, error) {
 
 // Format renders a security descriptor as an SDDL string. Access masks
 // are emitted as hex; a SID is emitted as its alias where one is known
-// and as the raw S-1-… form otherwise. NULL ACLs are written explicitly as
-// NO_ACCESS_CONTROL, including P/AR/AI flags, even if omitted during parsing.
+// and as the raw S-1-… form otherwise. A NULL ACL is omitted unless it
+// carries P/AR/AI flags, which it keeps as e.g. D:PNO_ACCESS_CONTROL; a
+// descriptor with nothing else to show is written D:NO_ACCESS_CONTROL.
 func Format(d sd.Descriptor, opts ...Option) (string, error) {
 	return formatDescriptor(d, collect(opts))
 }

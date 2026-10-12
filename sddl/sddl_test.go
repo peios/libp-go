@@ -61,7 +61,7 @@ func TestDomainAliasNeedsContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Format: %v", err)
 	}
-	if out != "O:DAD:NO_ACCESS_CONTROLS:NO_ACCESS_CONTROL" {
+	if out != "O:DA" {
 		t.Errorf("Format = %q, want %q", out, "O:DA")
 	}
 }

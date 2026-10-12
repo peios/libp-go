@@ -25,25 +25,30 @@ func formatDescriptor(d sd.Descriptor, opt options) (string, error) {
 		(d.Control&sd.ControlSACLPresent != 0 && d.SACL == nil) {
 		return "", fmt.Errorf("libp/sddl: ACL presence and data disagree")
 	}
-	{
-		b.WriteString("D:")
-		b.WriteString(formatACLFlags(d.Control, false))
-		if d.DACL == nil {
-			b.WriteString("NO_ACCESS_CONTROL")
-		} else if err := formatACEs(&b, d.DACL.Entries, opt); err != nil {
-			return "", err
-		}
+	if err := formatACLSection(&b, "D:", d.DACL, formatACLFlags(d.Control, false), opt); err != nil {
+		return "", err
 	}
-	{
-		b.WriteString("S:")
-		b.WriteString(formatACLFlags(d.Control, true))
-		if d.SACL == nil {
-			b.WriteString("NO_ACCESS_CONTROL")
-		} else if err := formatACEs(&b, d.SACL.Entries, opt); err != nil {
-			return "", err
-		}
+	if err := formatACLSection(&b, "S:", d.SACL, formatACLFlags(d.Control, true), opt); err != nil {
+		return "", err
+	}
+	if b.Len() == 0 {
+		// SDDL has no empty string; this is the NULL DACL it describes.
+		b.WriteString("D:NO_ACCESS_CONTROL")
 	}
 	return b.String(), nil
+}
+
+// formatACLSection writes one ACL section. A NULL ACL is elided unless it
+// carries P / AR / AI flags, which it keeps as e.g. D:PNO_ACCESS_CONTROL.
+func formatACLSection(b *strings.Builder, prefix string, acl *sd.ACL, flags string, opt options) error {
+	if acl == nil {
+		if flags != "" {
+			b.WriteString(prefix + flags + "NO_ACCESS_CONTROL")
+		}
+		return nil
+	}
+	b.WriteString(prefix + flags)
+	return formatACEs(b, acl.Entries, opt)
 }
 
 // formatACLFlags renders the P / AR / AI flag run for one ACL.
