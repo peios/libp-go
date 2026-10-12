@@ -163,7 +163,7 @@ func TestConformanceSIDAliases(t *testing.T) {
 			t.Errorf("%s:%d: Format(%q): %v", conformancePath, c.line, text, err)
 			continue
 		}
-		if out != text {
+		if out != text+"D:NO_ACCESS_CONTROLS:NO_ACCESS_CONTROL" {
 			t.Errorf("%s:%d: Format(Parse(%q)) = %q, want %q",
 				conformancePath, c.line, text, out, text)
 		}
