@@ -18,7 +18,7 @@ import (
 // updated on one side and not the other gets caught.
 const (
 	conformancePath     = "testdata/sddl-conformance.txt"
-	conformanceRevision = 1
+	conformanceRevision = 2
 )
 
 type conformanceCase struct {
