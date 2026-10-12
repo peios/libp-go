@@ -138,20 +138,20 @@ func (p *parser) scanACL(d *sd.Descriptor, isSACL bool) error {
 		}
 		p.pos++
 	}
-	flags := p.in[flagStart:p.pos]
+	flags := strings.ToUpper(p.in[flagStart:p.pos])
 
-	// NO_ACCESS_CONTROL is an explicit NULL ACL: the present bit stays
-	// clear and the ACL pointer stays nil.
-	if flags == "NO_ACCESS_CONTROL" {
-		return nil
-	}
-
-	protected, autoInherited, autoInheritReq, err := parseACLFlags(flags)
+	protected, autoInherited, autoInheritReq, nullACL, err := parseACLFlags(flags)
 	if err != nil {
 		return p.errf(flagStart, "%s", err)
 	}
+	if nullACL && p.pos < len(p.in) && p.in[p.pos] == '(' {
+		return p.errf(p.pos, "NO_ACCESS_CONTROL cannot accompany ACEs")
+	}
 
 	acl := &sd.ACL{}
+	if nullACL {
+		acl = nil
+	}
 	for p.pos < len(p.in) && p.in[p.pos] == '(' {
 		ace, err := p.scanACE()
 		if err != nil {
@@ -162,7 +162,9 @@ func (p *parser) scanACL(d *sd.Descriptor, isSACL bool) error {
 
 	var control sd.Control
 	if isSACL {
-		control = sd.ControlSACLPresent
+		if !nullACL {
+			control = sd.ControlSACLPresent
+		}
 		if protected {
 			control |= sd.ControlSACLProtected
 		}
@@ -174,7 +176,9 @@ func (p *parser) scanACL(d *sd.Descriptor, isSACL bool) error {
 		}
 		d.SACL = acl
 	} else {
-		control = sd.ControlDACLPresent
+		if !nullACL {
+			control = sd.ControlDACLPresent
+		}
 		if protected {
 			control |= sd.ControlDACLProtected
 		}
@@ -191,9 +195,15 @@ func (p *parser) scanACL(d *sd.Descriptor, isSACL bool) error {
 }
 
 // parseACLFlags decodes the P / AI / AR flag run of an ACL.
-func parseACLFlags(s string) (protected, autoInherited, autoInheritReq bool, err error) {
+func parseACLFlags(s string) (protected, autoInherited, autoInheritReq, nullACL bool, err error) {
 	for i := 0; i < len(s); {
 		switch {
+		case strings.HasPrefix(s[i:], "NO_ACCESS_CONTROL"):
+			if nullACL {
+				return false, false, false, false, fmt.Errorf("duplicate NO_ACCESS_CONTROL")
+			}
+			nullACL = true
+			i += len("NO_ACCESS_CONTROL")
 		case s[i] == 'P':
 			protected = true
 			i++
@@ -204,10 +214,10 @@ func parseACLFlags(s string) (protected, autoInherited, autoInheritReq bool, err
 			autoInheritReq = true
 			i += 2
 		default:
-			return false, false, false, fmt.Errorf("unknown ACL flag at %q", s[i:])
+			return false, false, false, false, fmt.Errorf("unknown ACL flag at %q", s[i:])
 		}
 	}
-	return protected, autoInherited, autoInheritReq, nil
+	return protected, autoInherited, autoInheritReq, nullACL, nil
 }
 
 // scanACE parses one parenthesised ACE at the cursor.
@@ -404,5 +414,5 @@ func isComponentTag(c byte) bool {
 }
 
 func isFlagChar(c byte) bool {
-	return (c >= 'A' && c <= 'Z') || c == '_'
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
 }

@@ -21,17 +21,25 @@ func formatDescriptor(d sd.Descriptor, opt options) (string, error) {
 		b.WriteString("G:")
 		b.WriteString(opt.formatSID(d.Group))
 	}
-	if d.DACL != nil {
+	if (d.Control&sd.ControlDACLPresent != 0 && d.DACL == nil) ||
+		(d.Control&sd.ControlSACLPresent != 0 && d.SACL == nil) {
+		return "", fmt.Errorf("libp/sddl: ACL presence and data disagree")
+	}
+	{
 		b.WriteString("D:")
 		b.WriteString(formatACLFlags(d.Control, false))
-		if err := formatACEs(&b, d.DACL.Entries, opt); err != nil {
+		if d.DACL == nil {
+			b.WriteString("NO_ACCESS_CONTROL")
+		} else if err := formatACEs(&b, d.DACL.Entries, opt); err != nil {
 			return "", err
 		}
 	}
-	if d.SACL != nil {
+	{
 		b.WriteString("S:")
 		b.WriteString(formatACLFlags(d.Control, true))
-		if err := formatACEs(&b, d.SACL.Entries, opt); err != nil {
+		if d.SACL == nil {
+			b.WriteString("NO_ACCESS_CONTROL")
+		} else if err := formatACEs(&b, d.SACL.Entries, opt); err != nil {
 			return "", err
 		}
 	}
